@@ -1,0 +1,4 @@
+# Core dependencies for local transcription and diarization
+faster-whisper
+pyannote.audio
+# For diarization, you may need a HuggingFace token for pyannote.audio models. 

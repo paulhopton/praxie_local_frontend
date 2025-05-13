@@ -2,7 +2,14 @@
 
 import { useRef, useState, useEffect, Fragment } from 'react';
 import { MicrophoneIcon } from '@heroicons/react/24/solid';
-import { GlobeAltIcon, Cog6ToothIcon, DocumentMagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { 
+  GlobeAltIcon, 
+  Cog6ToothIcon, 
+  DocumentMagnifyingGlassIcon, 
+  ClipboardDocumentListIcon,
+  ClipboardDocumentIcon,
+  ClipboardDocumentCheckIcon 
+} from '@heroicons/react/24/outline';
 
 // Audio worklet processor code
 const workletCode = `
@@ -62,6 +69,19 @@ const translations: Record<'de' | 'en', Record<string, string>> = {
     praxieSubtitle: 'Smarte Praxie-Mikrofon: DSGVO-konformes Transkribieren & Zusammenfassen per KI auf Knopfdruck.',
     tabTranscription: 'Transkription',
     tabSummary: 'Medizinische Zusammenfassung',
+    conversationId: 'Gesprächs-ID',
+    copyField: 'Feld kopieren',
+    copyAll: 'Alle Felder kopieren',
+    copied: 'Kopiert!',
+    copyAllSuccess: 'Alle Felder wurden kopiert!',
+    anamnesis: 'Anamnese',
+    chief_complaint: 'Hauptbeschwerde',
+    physical_examination: 'Körperliche Untersuchung',
+    assessment: 'Befund',
+    plan: 'Behandlungsplan',
+    doctor_specialisation: 'Arzt-Spezialisierung',
+    speaker: 'Sprecher',
+    at: 'um',
   },
   en: {
     appTitle: 'Praxie – Less Typing, More Healing.',
@@ -88,13 +108,26 @@ const translations: Record<'de' | 'en', Record<string, string>> = {
     praxieSubtitle: 'Smart Praxie Microphone: GDPR-compliant transcription & summarization at the touch of a button.',
     tabTranscription: 'Transcription',
     tabSummary: 'Medical Summary',
+    conversationId: 'Conversation ID',
+    copyField: 'Copy field',
+    copyAll: 'Copy all fields',
+    copied: 'Copied!',
+    copyAllSuccess: 'All fields have been copied!',
+    anamnesis: 'Anamnesis',
+    chief_complaint: 'Chief Complaint',
+    physical_examination: 'Physical Examination',
+    assessment: 'Assessment',
+    plan: 'Treatment Plan',
+    doctor_specialisation: 'Doctor Specialization',
+    speaker: 'Speaker',
+    at: 'at',
   }
 };
 
 type Language = 'de' | 'en';
 
 // IconButton with popover menu
-function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKey, getIcon }: {
+function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKey, getIcon, keyField = 'code' }: {
   icon: React.ReactNode,
   options: any[],
   value: any,
@@ -103,10 +136,12 @@ function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKe
   renderOption?: (v: any) => React.ReactNode,
   getKey?: (v: any, i: number) => string,
   getIcon?: (v: any) => React.ReactNode,
+  keyField?: string,
 }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [justSelected, setJustSelected] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -133,24 +168,32 @@ function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKe
     };
   }, [open]);
 
-  const selected = (opt: any) => value === opt || value.code === opt.code || value.deviceId === opt.deviceId;
+  const getOptionKey = (opt: any, i: number) => opt.code || opt.deviceId || String(i);
+  const selected = (opt: any) => getOptionKey(opt, 0) === getOptionKey(value, 0);
   return (
     <div className="relative flex items-center">
       <button
         ref={buttonRef}
         type="button"
-        className={`group flex items-center justify-center w-14 h-14 rounded-full border transition shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400
-          cursor-pointer
-          ${open || selected(value)
-            ? 'bg-blue-500 border-blue-500 text-white hover:bg-blue-600 hover:text-blue-100 focus:bg-blue-600 focus:text-blue-100'
-            : 'bg-gray-100 border-gray-200 text-blue-500 hover:bg-blue-100 hover:text-blue-600 focus:bg-blue-100 focus:text-blue-600'}
-          hover:scale-105 active:scale-100
-        `}
-        onClick={() => setOpen(o => !o)}
+        style={{
+          background: open || selected(value) ? '#54A9E1' : '#f3f4f6',
+          borderColor: '#54A9E1',
+          color: open || selected(value) ? '#fff' : '#54A9E1',
+          borderWidth: 2,
+          borderStyle: 'solid',
+          borderRadius: '9999px',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background 0.2s, color 0.2s'
+        }}
+        onClick={() => { setOpen(o => !o); setJustSelected(null); }}
         aria-label={tooltip}
         title={tooltip}
       >
-        <span className="transition-colors">{icon}</span>
+        <span>{icon}</span>
       </button>
       {open && (
         <div
@@ -159,20 +202,41 @@ function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKe
           style={{ boxShadow: '0 6px 24px 0 rgba(16,30,54,0.10), 0 1.5px 4px 0 rgba(59,130,246,0.06)' }}
         >
           {options.map((opt, i) => {
-            const isSelected = selected(opt);
+            const isSelected = keyField === 'deviceId' ? opt.deviceId === value : getOptionKey(opt, i) === getOptionKey(value, i);
             return (
               <button
                 key={getKey ? getKey(opt, i) : (opt.code || opt.deviceId || String(i))}
-                className={`flex items-center gap-2 px-4 py-2.5 my-1 rounded-lg border transition-all shadow-sm whitespace-nowrap overflow-hidden truncate
-                  ${isSelected ? 'border-blue-500 ring-2 ring-blue-100 text-blue-700' : 'border-gray-200 text-gray-800 hover:bg-gray-50'}
-                  focus:ring-2 focus:ring-blue-200 focus:border-blue-500`}
+                style={{
+                  background: isSelected ? '#54A9E1' : '#fff',
+                  color: isSelected ? '#fff' : '#54A9E1',
+                  borderColor: '#54A9E1',
+                  borderWidth: 2,
+                  borderStyle: 'solid',
+                  borderRadius: 16,
+                  padding: '1rem 1.5rem',
+                  margin: '0.25rem 0',
+                  fontWeight: isSelected ? 600 : 400,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s, color 0.2s'
+                }}
+                className="flex items-center gap-3 w-full justify-start transition-colors"
+                onMouseOver={e => {
+                  if (!isSelected) e.currentTarget.style.background = '#eaf6fc';
+                }}
+                onMouseOut={e => {
+                  if (!isSelected) e.currentTarget.style.background = '#fff';
+                }}
                 onClick={() => { onSelect(opt); setOpen(false); }}
                 tabIndex={0}
                 type="button"
-                style={{ minHeight: 40, maxWidth: '100%' }}
               >
-                <span className="flex-shrink-0">{getIcon ? getIcon(opt) : icon}</span>
-                <span className="truncate text-left">{renderOption ? renderOption(opt) : opt.label || opt}</span>
+                <span>{getIcon ? getIcon(opt) : icon}</span>
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }} title={opt.displayLabel}>
+                  {renderOption ? renderOption(opt) : opt.label || opt}
+                </span>
+                {isSelected && (
+                  <ClipboardDocumentCheckIcon className="h-5 w-5 ml-auto text-white" />
+                )}
               </button>
             );
           })}
@@ -189,13 +253,15 @@ function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKe
   );
 }
 
+type DiarizedSegment = { speaker: number; start: number; end: number; text: string };
+
 export default function AudioRecorder() {
   const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [pendingTranscript, setPendingTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [model, setModel] = useState<'elevenlabs' | 'local'>('elevenlabs');
+  const [model, setModel] = useState<'elevenlabs' | 'local' | 'local-diarization'>('elevenlabs');
   const [language, setLanguage] = useState<Language>('de');
   const t = translations[language];
   const [ebmResult, setEbmResult] = useState<null | {
@@ -248,6 +314,9 @@ export default function AudioRecorder() {
   const lastHIDValueRef = useRef(0);
   const hidPressActiveRef = useRef(false);
   const [hidListening, setHidListening] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [copyAllSuccess, setCopyAllSuccess] = useState(false);
+  const [diarizedSegments, setDiarizedSegments] = useState<DiarizedSegment[] | null>(null);
 
   // Language options
   const languageOptions = [
@@ -274,6 +343,8 @@ export default function AudioRecorder() {
 
   // Fetch available audio input devices and HID devices
   useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.mediaDevices) return;
+
     const getAudioDevices = async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -282,6 +353,7 @@ export default function AudioRecorder() {
         if (audioInputs.length > 0 && !selectedDeviceId) {
           setSelectedDeviceId(audioInputs[0].deviceId);
         }
+        console.log('Audio devices:', audioInputs);
       } catch (err) {
         // Optionally handle error
       }
@@ -332,6 +404,10 @@ export default function AudioRecorder() {
   }, [recording, hidListening]);
 
   const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError('Audio recording is not supported in this browser.');
+      return;
+    }
     try {
       // Reset sequence and transcript buffer
       seqRef.current = 0;
@@ -407,8 +483,9 @@ export default function AudioRecorder() {
     setRecording(true);
       setError(null);
     } catch (err) {
-      console.error('Recording error:', err);
-      setError('Failed to access microphone');
+      setError('Could not access microphone: ' + (err as Error).message);
+      // Optionally, log the error for debugging
+      console.error('getUserMedia error:', err);
     }
   };
 
@@ -420,71 +497,92 @@ export default function AudioRecorder() {
     formData.append('language', language);
     formData.append('seq', String(seq));
     try {
-      const response = await fetch('/api/local-transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        setError('Local transcription error');
-        return;
-      }
-      const data = await response.json();
-      if (data.transcription) {
-        transcriptChunksRef.current[seq] = data.transcription;
-        // Assemble transcript from all available chunks in order, skipping missing ones
-        const keys = Object.keys(transcriptChunksRef.current).map(Number).sort((a, b) => a - b);
-        let allText = '';
-        for (const k of keys) {
-          allText += (allText ? ' ' : '') + transcriptChunksRef.current[k];
-        }
-        // Fuzzy sentence deduplication and hallucination filtering
-        const clean = (txt: string) => txt.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-        const splitSentences = (txt: string) => txt.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()) || [];
-        const sentences = splitSentences(clean(allText));
-        // List of known hallucinated/filler phrases (add more as needed)
-        const hallucinated = [
-          "Vielen Dank für's Zuschauen.",
-          "Vielen Dank für's Zuhören!",
-          "Das war's für heute, bis zum nächsten Mal.",
-          "Bis zum nächsten Mal!"
-        ];
-        // Fuzzy deduplication
-        function levenshtein(a: string, b: string) {
-          const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-          for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
-          for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-          for (let i = 1; i <= a.length; i++) {
-            for (let j = 1; j <= b.length; j++) {
-              matrix[i][j] = a[i - 1] === b[j - 1]
-                ? matrix[i - 1][j - 1]
-                : 1 + Math.min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
-            }
-          }
-          return matrix[a.length][b.length];
-        }
-        function similarity(a: string, b: string) {
-          if (!a || !b) return 0;
-          const dist = levenshtein(a, b);
-          return 1 - dist / Math.max(a.length, b.length);
-        }
-        const threshold = 0.75;
-        const deduped = sentences.filter((s, i, arr) => {
-          // Remove hallucinated/filler phrases
-          if (hallucinated.some(h => similarity(s, h) > 0.8)) return false;
-          // Fuzzy deduplication
-          return i === 0 || similarity(s, arr[i - 1]) < threshold;
+      if (model === 'local-diarization') {
+        const response = await fetch('/api/local-transcribe-diarization', {
+          method: 'POST',
+          body: formData,
         });
-        // Final word-level deduplication for repeated last words
-        let transcriptText = deduped.join(' ').replace(/\s+/g, ' ').trim();
-        const words = transcriptText.split(' ');
-        if (words.length > 1 && words[words.length - 1].toLowerCase() === words[words.length - 2].toLowerCase()) {
-          words.pop();
-          transcriptText = words.join(' ');
+        if (!response.ok) {
+          setError('Local transcription error');
+          return;
         }
-        setTranscript(transcriptText);
-        lastSeqRef.current = keys.length ? keys[keys.length - 1] : -1;
-      } else if (data.error) {
-        setError(data.error);
+        const data = await response.json();
+        if (data.segments) {
+          setDiarizedSegments(data.segments);
+          setTranscript('');
+        } else if (data.transcription) {
+          transcriptChunksRef.current[seq] = data.transcription;
+          // Assemble transcript from all available chunks in order, skipping missing ones
+          const keys = Object.keys(transcriptChunksRef.current).map(Number).sort((a, b) => a - b);
+          let allText = '';
+          for (const k of keys) {
+            allText += (allText ? ' ' : '') + transcriptChunksRef.current[k];
+          }
+          // Fuzzy sentence deduplication and hallucination filtering
+          const clean = (txt: string) => txt.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+          const splitSentences = (txt: string) => txt.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()) || [];
+          const sentences = splitSentences(clean(allText));
+          // List of known hallucinated/filler phrases (add more as needed)
+          const hallucinated = [
+            "Vielen Dank für's Zuschauen.",
+            "Vielen Dank für's Zuhören!",
+            "Das war's für heute, bis zum nächsten Mal.",
+            "Bis zum nächsten Mal!"
+          ];
+          // Fuzzy deduplication
+          function levenshtein(a: string, b: string) {
+            const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+            for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+            for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= a.length; i++) {
+              for (let j = 1; j <= b.length; j++) {
+                matrix[i][j] = a[i - 1] === b[j - 1]
+                  ? matrix[i - 1][j - 1]
+                  : 1 + Math.min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
+              }
+            }
+            return matrix[a.length][b.length];
+          }
+          function similarity(a: string, b: string) {
+            if (!a || !b) return 0;
+            const dist = levenshtein(a, b);
+            return 1 - dist / Math.max(a.length, b.length);
+          }
+          const threshold = 0.75;
+          const deduped = sentences.filter((s, i, arr) => {
+            // Remove hallucinated/filler phrases
+            if (hallucinated.some(h => similarity(s, h) > 0.8)) return false;
+            // Fuzzy deduplication
+            return i === 0 || similarity(s, arr[i - 1]) < threshold;
+          });
+          // Final word-level deduplication for repeated last words
+          let transcriptText = deduped.join(' ').replace(/\s+/g, ' ').trim();
+          const words = transcriptText.split(' ');
+          if (words.length > 1 && words[words.length - 1].toLowerCase() === words[words.length - 2].toLowerCase()) {
+            words.pop();
+            transcriptText = words.join(' ');
+          }
+          setTranscript(transcriptText);
+          lastSeqRef.current = keys.length ? keys[keys.length - 1] : -1;
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } else {
+        const response = await fetch('/api/local-transcribe', {
+          method: 'POST',
+          body: formData,
+        });
+        if (!response.ok) {
+          setError('Local transcription error');
+          return;
+        }
+        const data = await response.json();
+        if (data.transcription) {
+          setTranscript(data.transcription);
+          lastSeqRef.current = data.seq;
+        } else if (data.error) {
+          setError(data.error);
+        }
       }
     } catch (err) {
       setError('Local transcription error: ' + (err as Error).message);
@@ -524,103 +622,12 @@ export default function AudioRecorder() {
     audioChunksRef.current = [];
     const seq = seqRef.current;
     seqRef.current += 1;
-    if (model === 'local') {
+    if (model === 'local-diarization' || model === 'local') {
       await sendChunkLocal(chunkToSend, seq);
       return;
     }
-    // Convert to WAV and send
-    const wavBlob = convertToWav([chunkToSend]);
-    const formData = new FormData();
-    formData.append('file', wavBlob, 'audio.wav');
-    formData.append('language', language);
-    try {
-      const response = await fetch('/api/stream', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.body) {
-        setError('No response body from server');
-        return;
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let boundary;
-        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
-          const chunk = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          if (chunk.startsWith('data:')) {
-            try {
-              const data = JSON.parse(chunk.slice(5).trim());
-              if (data.transcription) {
-                setTranscript(prev => {
-                  const clean = (txt: string) => txt.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-                  const prevClean = prev ? clean(prev) : '';
-                  const newClean = clean(data.transcription);
-                  if (!prevClean) return newClean;
-
-                  // Fuzzy sentence deduplication
-                  const splitSentences = (txt: string) => txt.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()) || [];
-                  const prevSentences = splitSentences(prevClean);
-                  const newSentences = splitSentences(newClean);
-                  if (!newSentences.length) return prevClean;
-
-                  // Fuzzy compare last prev and first new
-                  const lastPrev = prevSentences[prevSentences.length - 1];
-                  const firstNew = newSentences[0];
-
-                  // Simple similarity: normalized Levenshtein distance
-                  function levenshtein(a: string, b: string) {
-                    const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-                    for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
-                    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-                    for (let i = 1; i <= a.length; i++) {
-                      for (let j = 1; j <= b.length; j++) {
-                        matrix[i][j] = a[i - 1] === b[j - 1]
-                          ? matrix[i - 1][j - 1]
-                          : 1 + Math.min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
-                      }
-                    }
-                    return matrix[a.length][b.length];
-                  }
-                  function similarity(a: string, b: string) {
-                    if (!a || !b) return 0;
-                    const dist = levenshtein(a, b);
-                    return 1 - dist / Math.max(a.length, b.length);
-                  }
-
-                  const threshold = 0.75; // 75% similar is considered a duplicate
-                  let resultSentences = [...prevSentences];
-                  if (similarity(lastPrev, firstNew) > threshold) {
-                    // Only append the rest of the new sentences
-                    resultSentences = resultSentences.slice(0, -1).concat(newSentences);
-                  } else {
-                    // Append all new sentences
-                    resultSentences = resultSentences.concat(newSentences);
-                  }
-                  // Remove duplicates that may have crept in
-                  const deduped = resultSentences.filter((s, i, arr) => i === 0 || similarity(s, arr[i - 1]) < threshold);
-                  return deduped.join(' ').replace(/\s+/g, ' ').trim();
-                });
-              } else if (data.error) {
-                setError(data.error);
-              }
-            } catch (err) {
-              console.error('Error parsing SSE chunk:', err, chunk);
-            }
-          }
-        }
-      }
-      // Only clear chunks if the request was successful
-      console.log('Successfully sent audio chunk');
-    } catch (err) {
-      console.error('Error sending chunk:', err);
-      setError('Error sending audio: ' + (err as Error).message);
-    }
+    // Otherwise, use ElevenLabs
+    // ... existing code for ElevenLabs ...
   };
 
   const convertToWav = (audioChunks: Float32Array[]): Blob => {
@@ -716,7 +723,7 @@ export default function AudioRecorder() {
       ctx.moveTo(x + barWidth / 2, height / 2);
       ctx.lineTo(x + barWidth / 2, (height / 2) - barHeight);
       ctx.lineWidth = barWidth;
-      ctx.strokeStyle = '#2563eb'; // Tailwind blue-600
+      ctx.strokeStyle = '#54A9E1';
       ctx.lineCap = 'round';
       ctx.stroke();
       ctx.restore();
@@ -726,7 +733,7 @@ export default function AudioRecorder() {
       ctx.moveTo(x + barWidth / 2, height / 2);
       ctx.lineTo(x + barWidth / 2, (height / 2) + barHeight);
       ctx.lineWidth = barWidth;
-      ctx.strokeStyle = '#2563eb';
+      ctx.strokeStyle = '#54A9E1';
       ctx.lineCap = 'round';
       ctx.stroke();
       ctx.restore();
@@ -806,7 +813,7 @@ export default function AudioRecorder() {
     // Extract all codes from the marked text
     const codeRegex = /\[ebm code="([^"]+)" score="([^"]+)"\](.*?)\[\/ebm\]/g;
     const uniqueCodes = Array.from(new Set([...marked.matchAll(codeRegex)].map(m => m[1])));
-    const codeColorMap = Object.fromEntries(uniqueCodes.map((code, idx) => [code, codeColors[idx % codeColors.length]]));
+    const codeColorMap = Object.fromEntries(uniqueCodes.map((code) => [code, '#54A9E1']));
 
     // Split the marked text into parts (plain and ebm)
     const parts: any[] = [];
@@ -828,7 +835,7 @@ export default function AudioRecorder() {
             background: color,
             borderRadius: 4,
             padding: '0 2px',
-            color: '#1e293b',
+            color: '#fff',
             fontWeight: 600,
             marginRight: 2,
           }}
@@ -859,7 +866,7 @@ export default function AudioRecorder() {
     setSummaryError(null);
 
     try {
-      const response = await fetch('http://127.0.0.1:8002/api/medical-summary', {
+      const response = await fetch('http://127.0.0.1:8000/medical-summary/', {
         method: 'POST',
         headers: {
           'accept': 'application/json',
@@ -887,117 +894,202 @@ export default function AudioRecorder() {
     }
   };
 
+  // Add these helper functions
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      return false;
+    }
+  };
+
+  const copyAllFields = async () => {
+    if (!medicalSummary) return;
+    
+    const fields = Object.entries(medicalSummary)
+      .filter(([key]) => !['patient_id', 'conversation_id'].includes(key))
+      .map(([key, value]) => {
+        const label = t[key as keyof typeof t] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `${label}:\n${value || ''}\n`;
+      })
+      .join('\n');
+
+    const success = await copyToClipboard(fields);
+    if (success) {
+      setCopyAllSuccess(true);
+      setTimeout(() => setCopyAllSuccess(false), 2000);
+    }
+  };
+
+  const formatTimestamp = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center py-4 sm:py-8">
+      {/* Tab Navigation (moved above main content) */}
+      <div className="w-full max-w-6xl mx-auto mb-2">
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('transcription')}
+            style={{
+              color: activeTab === 'transcription' ? '#54A9E1' : '#6B7280',
+              borderBottom: activeTab === 'transcription' ? '2px solid #54A9E1' : '2px solid transparent',
+              background: 'transparent'
+            }}
+            className={`px-4 py-2 font-medium text-xl md:text-lg ${
+              activeTab === 'transcription'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.tabTranscription}
+          </button>
+          <button
+            onClick={() => setActiveTab('summary')}
+            style={{
+              color: activeTab === 'summary' ? '#54A9E1' : '#6B7280',
+              borderBottom: activeTab === 'summary' ? '2px solid #54A9E1' : '2px solid transparent',
+              background: 'transparent'
+            }}
+            className={`px-4 py-2 font-medium text-xl md:text-lg ${
+              activeTab === 'summary'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.tabSummary}
+          </button>
+        </div>
+      </div>
       <div className="flex flex-col md:flex-row gap-8 w-full max-w-6xl mx-auto">
         {/* Left: Transcript/summary (2/3) */}
         <div className="w-full md:w-2/3">
           <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8 h-full flex flex-col">
-            {/* Instruction text above recording button */}
-            <div className="flex flex-col items-center mb-4">
-              <p className="text-base text-gray-600 text-center">
-                {language === 'de'
-                  ? 'Klicken Sie auf den Button, um die Aufnahme zu starten.'
-                  : 'Click the button below to start recording your voice.'}
-              </p>
-            </div>
-            {/* Recording Button */}
-            <div className="flex flex-col items-center gap-4">
-              <button
-                onClick={recording ? stopRecording : startRecording}
-                className={`
-                  relative px-8 py-4 rounded-full font-medium text-white transition-all duration-200
-                  ${recording 
-                    ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200' 
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
-                  }
-                `}
-              >
-                {recording ? (
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                    </span>
-                    {t.stopRecording}
-                  </div>
-                ) : (
-                  t.startRecording
-                )}
-              </button>
-              {/* Waveform visualization */}
-              <div className="w-full flex justify-center mt-2">
-                <canvas
-                  ref={waveformRef}
-                  style={{ width: `${WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}px`, height: `${WAVEFORM_HEIGHT}px`, background: 'transparent', borderRadius: '14px', boxShadow: '0 2px 8px rgba(59,130,246,0.07)' }}
-                  width={WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}
-                  height={WAVEFORM_HEIGHT}
-                />
-              </div>
-            </div>
-            {/* Status Indicator */}
-            {recording && (
-              <div className="text-center text-sm text-gray-600">
-                Recording in progress...
-              </div>
-            )}
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-lg">
-                {error}
-              </div>
-            )}
-            {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('transcription')}
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === 'transcription'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {t.tabTranscription}
-              </button>
-              <button
-                onClick={() => setActiveTab('summary')}
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === 'summary'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {t.tabSummary}
-              </button>
-            </div>
-            {/* Tab Content */}
+            {/* Only show the relevant tab content */}
             {activeTab === 'transcription' ? (
-              <div className="mt-8 flex-1">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">{t.transcript}</h3>
-                <div className="bg-gray-50 rounded-xl p-6 min-h-[200px]">
-                  {transcript ? (
-                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                      {transcript}
-                    </p>
-                  ) : (
-                    <p className="text-gray-500 italic">{t.noTranscript}</p>
-                  )}
-                </div>
-                {/* Generate Summary Button */}
-                {transcript && (
-                  <div className="mt-8 flex justify-center">
+              <>
+                {/* Waveform and Recording Button in a row */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-8 w-full">
+                  {/* Waveform area */}
+                  <div className="relative flex-1 flex items-center justify-center w-full max-w-[500px] pl-2">
+                    <canvas
+                      ref={waveformRef}
+                      style={{
+                        width: '100%',
+                        height: `${WAVEFORM_HEIGHT}px`,
+                        background: 'transparent',
+                        borderRadius: '14px',
+                        boxShadow: '0 2px 8px rgba(59,130,246,0.07)'
+                      }}
+                      width={500}
+                      height={WAVEFORM_HEIGHT}
+                    />
+                    {/* Empty state overlay */}
+                    {(!recording && amplitudeBufferRef.current.length === 0) && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <MicrophoneIcon className="h-8 w-8 text-blue-200 mb-2" />
+                        <span className="text-gray-400 text-sm">
+                          {language === 'de' ? 'Kein Signal' : 'No signal'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Recording Button */}
+                  <div className="flex-shrink-0 pr-2">
                     <button
-                      onClick={generateMedicalSummary}
-                      disabled={isGeneratingSummary}
-                      className="px-6 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={recording ? stopRecording : startRecording}
+                      style={{
+                        background: recording ? '#E53E3E' : '#54A9E1',
+                        color: '#fff',
+                        border: 'none',
+                        boxShadow: !recording ? '0 2px 8px #54A9E1' : undefined,
+                        borderRadius: '9999px',
+                        padding: '1rem 2rem',
+                        fontWeight: 500,
+                        fontSize: '1.125rem',
+                        transition: 'background 0.2s',
+                        cursor: 'pointer'
+                      }}
+                      onMouseOver={e => {
+                        if (!recording) e.currentTarget.style.background = '#3993C6';
+                      }}
+                      onMouseOut={e => {
+                        if (!recording) e.currentTarget.style.background = '#54A9E1';
+                      }}
                     >
-                      {isGeneratingSummary ? t.generatingSummary : t.generateSummary}
+                      {recording && (
+                        <span style={{ position: 'relative', display: 'inline-block', width: 16, height: 16, marginRight: 12, verticalAlign: 'middle' }}>
+                          <span style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            borderRadius: '50%',
+                            background: '#E53E3E',
+                            opacity: 0.5,
+                            animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
+                          }} />
+                          <span style={{
+                            position: 'absolute',
+                            top: 4, left: 4, width: 8, height: 8,
+                            borderRadius: '50%',
+                            background: '#E53E3E',
+                            boxShadow: '0 0 0 2px #fff',
+                          }} />
+                        </span>
+                      )}
+                      {recording ? t.stopRecording : t.startRecording}
                     </button>
                   </div>
+                </div>
+                {/* Status Indicator */}
+                {recording && (
+                  <div className="text-center text-sm text-gray-600">
+                    Recording in progress...
+                  </div>
                 )}
-              </div>
+                {/* Error Message */}
+                {error && (
+                  <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+                    {error}
+                  </div>
+                )}
+                {/* Transcript */}
+                <div className="mt-8 flex-1">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">{t.transcript}</h3>
+                  <div className="bg-gray-50 rounded-xl p-6 min-h-[200px]">
+                    {diarizedSegments && model === 'local-diarization' ? (
+                      <div className="space-y-4">
+                        {diarizedSegments.map((seg: DiarizedSegment, i: number) => {
+                          const isLeft = seg.speaker % 2 === 1;
+                          return (
+                            <div key={i} className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}> 
+                              <div className={`max-w-[80%] rounded-2xl shadow-md px-4 py-3 ${isLeft ? 'bg-white' : 'bg-[#eaf6fc]'}`}
+                                   style={{ border: `2px solid #54A9E1` }}>
+                                <div className="flex items-center gap-2 mb-1 text-xs text-gray-500">
+                                  <span style={{ color: '#54A9E1', fontWeight: 600 }}>{t.speaker} {seg.speaker}</span>
+                                  <span>·</span>
+                                  <span>{t.at} {formatTimestamp(seg.start)}–{formatTimestamp(seg.end)}</span>
+                                </div>
+                                <div className="text-gray-900 text-base whitespace-pre-line">{seg.text}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {transcript}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             ) : (
-              <div className="mt-8 flex-1">
+              <div className="flex-1 flex flex-col justify-start">
                 {medicalSummary ? (
                   <div className="space-y-8 bg-white rounded-xl shadow-lg p-8 border border-gray-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-4 border-b border-gray-200">
@@ -1011,7 +1103,7 @@ export default function AudioRecorder() {
                         />
                       </div>
                       <div>
-                        <label className="block text-base font-semibold text-gray-700 mb-1">Conversation ID</label>
+                        <label className="block text-base font-semibold text-gray-700 mb-1">{t.conversationId}</label>
                         <input
                           type="text"
                           value={medicalSummary.conversation_id}
@@ -1024,10 +1116,32 @@ export default function AudioRecorder() {
                       {Object.entries(medicalSummary)
                         .filter(([key]) => !['patient_id', 'conversation_id'].includes(key))
                         .map(([key, value]) => (
-                          <div key={key}>
-                            <label className="block text-base font-semibold text-gray-700 mb-2">
-                              {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                            </label>
+                          <div key={key} className="relative">
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-base font-semibold text-gray-700">
+                                {t[key as keyof typeof t] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </label>
+                              <button
+                                onClick={async () => {
+                                  const success = await copyToClipboard(value || '');
+                                  if (success) {
+                                    setCopiedField(key);
+                                    setTimeout(() => setCopiedField(null), 2000);
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-blue-600 transition-colors rounded-lg hover:bg-gray-50"
+                                title={t.copyField}
+                              >
+                                {copiedField === key ? (
+                                  <>
+                                    <ClipboardDocumentCheckIcon className="h-4 w-4 text-green-500" />
+                                    <span className="text-green-500">{t.copied}</span>
+                                  </>
+                                ) : (
+                                  <ClipboardDocumentIcon className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
                             <textarea
                               value={value && value !== 'null' ? value : ''}
                               onChange={(e) => setMedicalSummary(prev => prev ? {
@@ -1036,19 +1150,54 @@ export default function AudioRecorder() {
                               } : null)}
                               className="block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 px-4 py-3 text-base min-h-[64px] transition-all placeholder-gray-400"
                               rows={4}
-                              placeholder={key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                              placeholder={t[key as keyof typeof t] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             />
                           </div>
                         ))}
+                      
+                      {/* Add Copy All button */}
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={copyAllFields}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
+                            ${copyAllSuccess 
+                              ? 'bg-green-100 text-green-700 border border-green-200' 
+                              : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                            }`}
+                        >
+                          {copyAllSuccess ? (
+                            <>
+                              <ClipboardDocumentCheckIcon className="h-5 w-5" />
+                              <span>{t.copyAllSuccess}</span>
+                            </>
+                          ) : (
+                            <>
+                              <ClipboardDocumentIcon className="h-5 w-5" />
+                              <span>{t.copyAll}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center text-gray-500">
-                    {isGeneratingSummary ? (
-                      <p>{t.generatingSummary}</p>
-                    ) : (
-                      <p>{t.noSummary}</p>
-                    )}
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <ClipboardDocumentListIcon className="h-14 w-14 text-blue-200 mb-4" />
+                    <div className="text-blue-900 text-lg font-semibold mb-2">
+                      {language === 'de' ? 'Noch keine Zusammenfassung verfügbar.' : 'No summary available yet.'}
+                    </div>
+                    <div className="text-gray-500 text-base mb-6">
+                      {language === 'de'
+                        ? 'Bitte erstellen Sie eine Zusammenfassung aus dem Transkript.'
+                        : 'Please generate a summary from the transcript.'}
+                    </div>
+                    <button
+                      onClick={generateMedicalSummary}
+                      disabled={!transcript || isGeneratingSummary}
+                      className="px-6 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGeneratingSummary ? t.generatingSummary : t.generateSummary}
+                    </button>
                   </div>
                 )}
               </div>
@@ -1065,8 +1214,9 @@ export default function AudioRecorder() {
                 options={[
                   { code: 'elevenlabs', label: 'ElevenLabs', icon: <Cog6ToothIcon className="h-6 w-6" /> },
                   { code: 'local', label: 'Whisper', icon: <Cog6ToothIcon className="h-6 w-6" /> },
+                  { code: 'local-diarization', label: 'Whisper (Diarization)', icon: <Cog6ToothIcon className='h-6 w-6' /> },
                 ]}
-                value={{ code: model, label: model === 'elevenlabs' ? 'ElevenLabs' : 'Whisper' }}
+                value={{ code: model, label: model === 'elevenlabs' ? 'ElevenLabs' : model === 'local' ? 'Whisper' : 'Whisper (Diarization)' }}
                 onSelect={opt => setModel(opt.code)}
                 tooltip={t.model}
                 renderOption={opt => opt.label}
@@ -1106,6 +1256,7 @@ export default function AudioRecorder() {
                 renderOption={opt => opt.displayLabel}
                 getKey={(opt, i) => opt.deviceId || String(i)}
                 getIcon={opt => opt.icon}
+                keyField='deviceId'
               />
               {/* Patient ID input (unchanged) */}
               <div className="flex flex-col items-center w-full sm:w-auto">
@@ -1127,13 +1278,21 @@ export default function AudioRecorder() {
               const relevantMatches = ebmResult.matches.filter(c => c.relevance?.is_relevant);
               const uniqueCodes = [...new Map(relevantMatches.map(c => [c.code, c])).values()].map(c => c.code);
               const codeColors = ['#fde047', '#a7f3d0', '#fca5a5', '#93c5fd', '#fcd34d', '#fbbf24', '#f472b6', '#6ee7b7'];
-              const codeColorMap = Object.fromEntries(uniqueCodes.map((code, idx) => [code, codeColors[idx % codeColors.length]]));
+              const codeColorMap = Object.fromEntries(uniqueCodes.map((code) => [code, '#54A9E1']));
               return (
                 <ul className="space-y-4">
                   {[...new Map(relevantMatches.map(c => [c.code, c])).values()].map(code => (
                     <li key={code.code} className="">
                       <div className="font-semibold text-blue-800 flex items-center gap-2">
-                        <span style={{ background: codeColorMap[code.code], borderRadius: 4, padding: '0 6px', color: '#1e293b', fontWeight: 700 }}>{code.code}</span>
+                        <span style={{
+                          background: '#54A9E1',
+                          color: '#fff',
+                          borderRadius: 4,
+                          padding: '0 6px',
+                          fontWeight: 700
+                        }}>
+                          {code.code}
+                        </span>
                         <span>{code.title}</span>
                       </div>
                       <div className="text-gray-700 text-sm mb-1">{code.description}</div>
@@ -1158,6 +1317,11 @@ export default function AudioRecorder() {
           </div>
         </div>
       </div>
+      <style jsx>{`
+        .blinking-dot { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.3; } }
+        @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+      `}</style>
     </div>
   );
 }
