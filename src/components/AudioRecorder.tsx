@@ -1,6 +1,8 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, Fragment } from 'react';
+import { MicrophoneIcon } from '@heroicons/react/24/solid';
+import { GlobeAltIcon, Cog6ToothIcon, DocumentMagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 // Audio worklet processor code
 const workletCode = `
@@ -30,6 +32,163 @@ const OVERLAP_SECONDS = 1; // 1 second overlap
 const SILENCE_DURATION_MS = 700; // 700ms of silence to trigger send
 const SILENCE_THRESHOLD = 0.01; // Adjust as needed for your mic/environment
 
+// Praxie logo URL from https://www.praxie.berlin/
+const PRAXIE_LOGO_URL = '/logo.svg';
+
+// Simple translation object for German and English
+const translations: Record<'de' | 'en', Record<string, string>> = {
+  de: {
+    appTitle: 'Praxie – Weniger Tippen, mehr Heilen.',
+    model: 'Modell',
+    language: 'Sprache',
+    microphone: 'Mikrofon',
+    patientId: 'Patienten-ID',
+    notRecording: 'Nicht am Aufnehmen',
+    recording: 'Aufnahme läuft',
+    startRecording: 'Aufnahme starten',
+    stopRecording: 'Aufnahme beenden',
+    transcript: 'Transkript',
+    noTranscript: 'Noch kein Transkript. Starten Sie die Aufnahme, um hier Text zu sehen.',
+    codesFound: 'Vorgeschlagene EBM-Codes',
+    summary: 'Medizinische Zusammenfassung',
+    generateSummary: 'Zusammenfassung erstellen',
+    generatingSummary: 'Erstelle Zusammenfassung...',
+    noSummary: 'Noch keine Zusammenfassung verfügbar. Bitte aus dem Transkript generieren.',
+    selectDevice: 'Gerät auswählen',
+    selectLanguage: 'Sprache wählen',
+    selectModel: 'Modell wählen',
+    selectMicrophone: 'Mikrofon wählen',
+    praxieSlogan: 'Durch KI den Praxis-Alltag erleichtern',
+    praxieSubtitle: 'Smarte Praxie-Mikrofon: DSGVO-konformes Transkribieren & Zusammenfassen per KI auf Knopfdruck.',
+    tabTranscription: 'Transkription',
+    tabSummary: 'Medizinische Zusammenfassung',
+  },
+  en: {
+    appTitle: 'Praxie – Less Typing, More Healing.',
+    model: 'Model',
+    language: 'Language',
+    microphone: 'Microphone',
+    patientId: 'Patient ID',
+    notRecording: 'Not Recording',
+    recording: 'Recording',
+    startRecording: 'Start Recording',
+    stopRecording: 'Stop Recording',
+    transcript: 'Transcript',
+    noTranscript: 'No transcript yet. Start recording to see text here.',
+    codesFound: 'Suggested EBM Codes',
+    summary: 'Medical Summary',
+    generateSummary: 'Create Summary',
+    generatingSummary: 'Generating summary...',
+    noSummary: 'No summary available yet. Please generate from the transcript.',
+    selectDevice: 'Select Device',
+    selectLanguage: 'Select Language',
+    selectModel: 'Select Model',
+    selectMicrophone: 'Select Microphone',
+    praxieSlogan: 'AI makes your practice easier',
+    praxieSubtitle: 'Smart Praxie Microphone: GDPR-compliant transcription & summarization at the touch of a button.',
+    tabTranscription: 'Transcription',
+    tabSummary: 'Medical Summary',
+  }
+};
+
+type Language = 'de' | 'en';
+
+// IconButton with popover menu
+function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKey, getIcon }: {
+  icon: React.ReactNode,
+  options: any[],
+  value: any,
+  onSelect: (v: any) => void,
+  tooltip: string,
+  renderOption?: (v: any) => React.ReactNode,
+  getKey?: (v: any, i: number) => string,
+  getIcon?: (v: any) => React.ReactNode,
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent | TouchEvent) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    document.addEventListener('touchstart', handle);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handle);
+      document.removeEventListener('touchstart', handle);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const selected = (opt: any) => value === opt || value.code === opt.code || value.deviceId === opt.deviceId;
+  return (
+    <div className="relative flex items-center">
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`group flex items-center justify-center w-14 h-14 rounded-full border transition shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400
+          cursor-pointer
+          ${open || selected(value)
+            ? 'bg-blue-500 border-blue-500 text-white hover:bg-blue-600 hover:text-blue-100 focus:bg-blue-600 focus:text-blue-100'
+            : 'bg-gray-100 border-gray-200 text-blue-500 hover:bg-blue-100 hover:text-blue-600 focus:bg-blue-100 focus:text-blue-600'}
+          hover:scale-105 active:scale-100
+        `}
+        onClick={() => setOpen(o => !o)}
+        aria-label={tooltip}
+        title={tooltip}
+      >
+        <span className="transition-colors">{icon}</span>
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          className="absolute z-40 left-1/2 -translate-x-1/2 mt-3 min-w-[260px] max-w-[340px] px-2 bg-white border border-gray-100 rounded-2xl shadow-lg py-3 ring-1 ring-black ring-opacity-5 animate-fadeIn max-h-80 overflow-auto flex flex-col"
+          style={{ boxShadow: '0 6px 24px 0 rgba(16,30,54,0.10), 0 1.5px 4px 0 rgba(59,130,246,0.06)' }}
+        >
+          {options.map((opt, i) => {
+            const isSelected = selected(opt);
+            return (
+              <button
+                key={getKey ? getKey(opt, i) : (opt.code || opt.deviceId || String(i))}
+                className={`flex items-center gap-2 px-4 py-2.5 my-1 rounded-lg border transition-all shadow-sm whitespace-nowrap overflow-hidden truncate
+                  ${isSelected ? 'border-blue-500 ring-2 ring-blue-100 text-blue-700' : 'border-gray-200 text-gray-800 hover:bg-gray-50'}
+                  focus:ring-2 focus:ring-blue-200 focus:border-blue-500`}
+                onClick={() => { onSelect(opt); setOpen(false); }}
+                tabIndex={0}
+                type="button"
+                style={{ minHeight: 40, maxWidth: '100%' }}
+              >
+                <span className="flex-shrink-0">{getIcon ? getIcon(opt) : icon}</span>
+                <span className="truncate text-left">{renderOption ? renderOption(opt) : opt.label || opt}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <style jsx>{`
+        .animate-fadeIn { animation: fadeIn 0.18s cubic-bezier(.4,0,.2,1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+        @media (max-width: 640px) {
+          .z-40 { min-width: 96vw !important; left: 2vw !important; right: 2vw !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function AudioRecorder() {
   const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -37,7 +196,8 @@ export default function AudioRecorder() {
   const [pendingTranscript, setPendingTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<'elevenlabs' | 'local'>('elevenlabs');
-  const [language, setLanguage] = useState('de');
+  const [language, setLanguage] = useState<Language>('de');
+  const t = translations[language];
   const [ebmResult, setEbmResult] = useState<null | {
     matches: {
       code: string;
@@ -70,7 +230,7 @@ export default function AudioRecorder() {
   const WAVEFORM_BAR_GAP = 2;
   const WAVEFORM_HEIGHT = 64;
   const [activeTab, setActiveTab] = useState<'transcription' | 'summary'>('transcription');
-  const [patientId, setPatientId] = useState<string>('');
+  const [patientId, setPatientId] = useState<string>('2025');
   const [medicalSummary, setMedicalSummary] = useState<{
     patient_id: string;
     conversation_id: string;
@@ -87,6 +247,7 @@ export default function AudioRecorder() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const lastHIDValueRef = useRef(0);
   const hidPressActiveRef = useRef(false);
+  const [hidListening, setHidListening] = useState(false);
 
   // Language options
   const languageOptions = [
@@ -111,7 +272,7 @@ export default function AudioRecorder() {
     return result;
   };
 
-  // Fetch available audio input devices
+  // Fetch available audio input devices and HID devices
   useEffect(() => {
     const getAudioDevices = async () => {
       try {
@@ -131,6 +292,44 @@ export default function AudioRecorder() {
       navigator.mediaDevices.removeEventListener('devicechange', getAudioDevices);
     };
   }, []);
+
+  // Automatically listen for OSM09 HID button if present and permission is granted
+  useEffect(() => {
+    const listenForOSM09 = async () => {
+      const navAny = navigator as any;
+      if (!('hid' in navAny)) return;
+      try {
+        // Get all HID devices the user has already granted access to
+        const devices = await navAny.hid.getDevices();
+        const osm09 = devices.find((d: any) => d.productName === 'OSM09');
+        if (osm09 && !hidListening) {
+          await osm09.open();
+          osm09.oninputreport = (event: any) => {
+            const value = event.data.getUint8(0);
+            console.log('HID input report:', event);
+            console.log('Raw data:', [value]);
+            // Only toggle on a full press-and-release sequence: 128 (down), then 0 (up)
+            if (value === 128) {
+              hidPressActiveRef.current = true;
+            } else if (value === 0 && hidPressActiveRef.current) {
+              if (recording) {
+                stopRecording();
+              } else {
+                startRecording();
+              }
+              hidPressActiveRef.current = false;
+            }
+            lastHIDValueRef.current = value;
+          };
+          setHidListening(true);
+        }
+      } catch (err) {
+        // Optionally handle error
+      }
+    };
+    listenForOSM09();
+    // Optionally, re-run if recording state changes (to keep in sync)
+  }, [recording, hidListening]);
 
   const startRecording = async () => {
     try {
@@ -688,327 +887,275 @@ export default function AudioRecorder() {
     }
   };
 
-  // WebHID API: Request HID devices and log them
-  const requestHIDDevices = async () => {
-    const navAny = navigator as any;
-    if (!('hid' in navAny)) {
-      alert('WebHID API is not supported in this browser. Try Chrome.');
-      return;
-    }
-    try {
-      const devices = await navAny.hid.requestDevice({ filters: [] });
-      console.log('WebHID devices:', devices);
-      if (devices.length === 0) {
-        alert('No HID devices found or access denied.');
-      } else {
-        alert(`Found ${devices.length} HID device(s). Check the console for details.`);
-      }
-    } catch (err) {
-      alert('Error requesting HID devices: ' + err);
-    }
-  };
-
-  // Listen for OSM09 HID button press and toggle recording
-  const listenToHIDButton = async () => {
-    const navAny = navigator as any;
-    if (!('hid' in navAny)) {
-      alert('WebHID API is not supported in this browser. Try Chrome.');
-      return;
-    }
-    // OSM09: vendorId 6975, productId 8200
-    const devices = await navAny.hid.requestDevice({ filters: [{ vendorId: 6975, productId: 8200 }] });
-    if (devices.length === 0) {
-      alert('No OSM09 device found.');
-      return;
-    }
-    const device = devices[0];
-    await device.open();
-    device.oninputreport = (event: any) => {
-      const value = event.data.getUint8(0);
-      console.log('HID input report:', event);
-      console.log('Raw data:', [value]);
-      // Only toggle on a full press-and-release sequence: 128 (down), then 0 (up)
-      if (value === 128) {
-        hidPressActiveRef.current = true;
-      } else if (value === 0 && hidPressActiveRef.current) {
-        // Toggle recording on release after a press
-        if (recording) {
-          stopRecording();
-        } else {
-          startRecording();
-        }
-        hidPressActiveRef.current = false;
-      }
-      lastHIDValueRef.current = value;
-    };
-    alert('Listening for button presses on OSM09. Try pressing the button!');
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center py-8">
-      {/* Toolbar for model/language selection */}
-      <div className="flex flex-row gap-6 mb-8 bg-white rounded-full shadow px-6 py-3 items-center">
-        <div className="flex items-center gap-2">
-          <label className="font-medium text-gray-700">Model:</label>
-          <select
-            value={model}
-            onChange={e => setModel(e.target.value as 'elevenlabs' | 'local')}
-            className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-          >
-            <option value="elevenlabs">ElevenLabs</option>
-            <option value="local">Local (Whisper)</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="font-medium text-gray-700">Language:</label>
-          <select
-            value={language}
-            onChange={e => setLanguage(e.target.value)}
-            className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-          >
-            {languageOptions.map(opt => (
-              <option key={opt.code} value={opt.code}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="font-medium text-gray-700">Microphone:</label>
-          <select
-            value={selectedDeviceId}
-            onChange={e => setSelectedDeviceId(e.target.value)}
-            className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-          >
-            {audioDevices.map(device => (
-              <option key={device.deviceId} value={device.deviceId}>{device.label || `Microphone ${device.deviceId}`}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="font-medium text-gray-700">Patient ID:</label>
-          <input
-            type="text"
-            value={patientId}
-            onChange={e => setPatientId(e.target.value)}
-            placeholder="Enter patient ID"
-            className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-          />
-        </div>
-        <button
-          onClick={requestHIDDevices}
-          className="px-4 py-2 bg-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-300 transition"
-          type="button"
-        >
-          Try WebHID
-        </button>
-        <button
-          onClick={listenToHIDButton}
-          className="px-4 py-2 bg-yellow-200 rounded-full text-gray-700 font-medium hover:bg-yellow-300 transition"
-          type="button"
-        >
-          Listen for OSM09 Button
-        </button>
-        <div className={`flex items-center gap-2 ${recording ? 'text-green-600' : 'text-gray-400'}`}
-             title={recording ? 'Recording is active' : 'Not recording'}>
-          <span className={`inline-block w-3 h-3 rounded-full ${recording ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-          <span className="font-medium">{recording ? 'Recording' : 'Not Recording'}</span>
-        </div>
-      </div>
-
-      <div className="max-w-3xl w-full mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8">
-          {/* Header */}
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-semibold text-gray-900">Voice Transcription</h2>
-            <p className="text-gray-600">Click the button below to start recording your voice</p>
-          </div>
-
-          {/* Recording Button */}
-          <div className="flex flex-col items-center gap-4">
-            <button
-              onClick={recording ? stopRecording : startRecording}
-              className={`
-                relative px-8 py-4 rounded-full font-medium text-white transition-all duration-200
-                ${recording 
-                  ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200' 
-                  : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
-                }
-              `}
-            >
-              {recording ? (
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                  </span>
-                  Stop Recording
-                </div>
-              ) : (
-                'Start Recording'
-              )}
-            </button>
-            {/* Waveform visualization */}
-            <div className="w-full flex justify-center mt-2">
-              <canvas
-                ref={waveformRef}
-                style={{ width: `${WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}px`, height: `${WAVEFORM_HEIGHT}px`, background: 'transparent', borderRadius: '14px', boxShadow: '0 2px 8px rgba(59,130,246,0.07)' }}
-                width={WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}
-                height={WAVEFORM_HEIGHT}
-              />
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center py-4 sm:py-8">
+      <div className="flex flex-col md:flex-row gap-8 w-full max-w-6xl mx-auto">
+        {/* Left: Transcript/summary (2/3) */}
+        <div className="w-full md:w-2/3">
+          <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8 h-full flex flex-col">
+            {/* Instruction text above recording button */}
+            <div className="flex flex-col items-center mb-4">
+              <p className="text-base text-gray-600 text-center">
+                {language === 'de'
+                  ? 'Klicken Sie auf den Button, um die Aufnahme zu starten.'
+                  : 'Click the button below to start recording your voice.'}
+              </p>
             </div>
-          </div>
-
-          {/* Status Indicator */}
-          {recording && (
-            <div className="text-center text-sm text-gray-600">
-              Recording in progress...
+            {/* Recording Button */}
+            <div className="flex flex-col items-center gap-4">
+              <button
+                onClick={recording ? stopRecording : startRecording}
+                className={`
+                  relative px-8 py-4 rounded-full font-medium text-white transition-all duration-200
+                  ${recording 
+                    ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200' 
+                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
+                  }
+                `}
+              >
+                {recording ? (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                    </span>
+                    {t.stopRecording}
+                  </div>
+                ) : (
+                  t.startRecording
+                )}
+              </button>
+              {/* Waveform visualization */}
+              <div className="w-full flex justify-center mt-2">
+                <canvas
+                  ref={waveformRef}
+                  style={{ width: `${WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}px`, height: `${WAVEFORM_HEIGHT}px`, background: 'transparent', borderRadius: '14px', boxShadow: '0 2px 8px rgba(59,130,246,0.07)' }}
+                  width={WAVEFORM_BARS * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)}
+                  height={WAVEFORM_HEIGHT}
+                />
+              </div>
             </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-4 bg-red-50 text-red-600 rounded-lg">
-              {error}
+            {/* Status Indicator */}
+            {recording && (
+              <div className="text-center text-sm text-gray-600">
+                Recording in progress...
+              </div>
+            )}
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+                {error}
+              </div>
+            )}
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab('transcription')}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === 'transcription'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.tabTranscription}
+              </button>
+              <button
+                onClick={() => setActiveTab('summary')}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === 'summary'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.tabSummary}
+              </button>
             </div>
-          )}
-
-          {/* Tab Navigation */}
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab('transcription')}
-              className={`px-4 py-2 font-medium text-sm ${
-                activeTab === 'transcription'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Transcription
-            </button>
-            <button
-              onClick={() => setActiveTab('summary')}
-              className={`px-4 py-2 font-medium text-sm ${
-                activeTab === 'summary'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Medical Summary
-            </button>
-          </div>
-
-          {/* Tab Content */}
-          {activeTab === 'transcription' ? (
-            <>
-              {/* Transcript */}
-              <div className="mt-8">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Transcript</h3>
+            {/* Tab Content */}
+            {activeTab === 'transcription' ? (
+              <div className="mt-8 flex-1">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">{t.transcript}</h3>
                 <div className="bg-gray-50 rounded-xl p-6 min-h-[200px]">
                   {transcript ? (
                     <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                       {transcript}
                     </p>
                   ) : (
-                    <p className="text-gray-500 italic">No transcription yet. Start recording to see the text appear here.</p>
+                    <p className="text-gray-500 italic">{t.noTranscript}</p>
                   )}
+                </div>
+                {/* Generate Summary Button */}
+                {transcript && (
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      onClick={generateMedicalSummary}
+                      disabled={isGeneratingSummary}
+                      className="px-6 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGeneratingSummary ? t.generatingSummary : t.generateSummary}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-8 flex-1">
+                {medicalSummary ? (
+                  <div className="space-y-8 bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-4 border-b border-gray-200">
+                      <div>
+                        <label className="block text-base font-semibold text-gray-700 mb-1">{t.patientId}</label>
+                        <input
+                          type="text"
+                          value={medicalSummary.patient_id}
+                          disabled
+                          className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 text-base cursor-not-allowed"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-base font-semibold text-gray-700 mb-1">Conversation ID</label>
+                        <input
+                          type="text"
+                          value={medicalSummary.conversation_id}
+                          disabled
+                          className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 text-base cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-6">
+                      {Object.entries(medicalSummary)
+                        .filter(([key]) => !['patient_id', 'conversation_id'].includes(key))
+                        .map(([key, value]) => (
+                          <div key={key}>
+                            <label className="block text-base font-semibold text-gray-700 mb-2">
+                              {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                            </label>
+                            <textarea
+                              value={value && value !== 'null' ? value : ''}
+                              onChange={(e) => setMedicalSummary(prev => prev ? {
+                                ...prev,
+                                [key]: e.target.value
+                              } : null)}
+                              className="block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 px-4 py-3 text-base min-h-[64px] transition-all placeholder-gray-400"
+                              rows={4}
+                              placeholder={key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">
+                    {isGeneratingSummary ? (
+                      <p>{t.generatingSummary}</p>
+                    ) : (
+                      <p>{t.noSummary}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Right: Settings (top) + EBM codes (bottom) (1/3) */}
+        <div className="w-full md:w-1/3 flex flex-col gap-8">
+          {/* Settings Box (no header) */}
+          <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col gap-6">
+            <div className="flex flex-row flex-wrap gap-6 items-center justify-center">
+              <IconMenu
+                icon={<Cog6ToothIcon className="h-7 w-7" />}
+                options={[
+                  { code: 'elevenlabs', label: 'ElevenLabs', icon: <Cog6ToothIcon className="h-6 w-6" /> },
+                  { code: 'local', label: 'Whisper', icon: <Cog6ToothIcon className="h-6 w-6" /> },
+                ]}
+                value={{ code: model, label: model === 'elevenlabs' ? 'ElevenLabs' : 'Whisper' }}
+                onSelect={opt => setModel(opt.code)}
+                tooltip={t.model}
+                renderOption={opt => opt.label}
+                getKey={(opt, i) => opt.code || String(i)}
+                getIcon={opt => opt.icon}
+              />
+              <IconMenu
+                icon={<GlobeAltIcon className="h-7 w-7" />}
+                options={languageOptions.map(opt => ({ ...opt, icon: <GlobeAltIcon className="h-6 w-6" /> }))}
+                value={languageOptions.find(opt => opt.code === language) || languageOptions[0]}
+                onSelect={opt => setLanguage(opt.code as Language)}
+                tooltip={t.language}
+                renderOption={opt => opt.label}
+                getKey={(opt, i) => opt.code || String(i)}
+                getIcon={opt => opt.icon}
+              />
+              <IconMenu
+                icon={<MicrophoneIcon className="h-7 w-7" />}
+                options={audioDevices.map((d, i) => ({
+                  ...d,
+                  icon: <MicrophoneIcon className="h-6 w-6" />,
+                  displayLabel: d.label && d.label.trim() ? d.label : `${t.microphone} ${i + 1}`
+                }))}
+                value={(() => {
+                  const found = audioDevices.find(d => d.deviceId === selectedDeviceId);
+                  if (found) {
+                    return {
+                      ...found,
+                      icon: <MicrophoneIcon className="h-6 w-6" />,
+                      displayLabel: found.label && found.label.trim() ? found.label : `${t.microphone} ${audioDevices.indexOf(found) + 1}`
+                    };
+                  }
+                  return { displayLabel: t.microphone, deviceId: '', icon: <MicrophoneIcon className="h-6 w-6" /> };
+                })()}
+                onSelect={opt => setSelectedDeviceId(opt.deviceId)}
+                tooltip={t.microphone}
+                renderOption={opt => opt.displayLabel}
+                getKey={(opt, i) => opt.deviceId || String(i)}
+                getIcon={opt => opt.icon}
+              />
+              {/* Patient ID input (unchanged) */}
+              <div className="flex flex-col items-center w-full sm:w-auto">
+                <span className="font-medium text-gray-700 mb-1">{t.patientId}</span>
+                <input
+                  type="text"
+                  value={patientId}
+                  onChange={e => setPatientId(e.target.value)}
+                  placeholder={t.patientId}
+                  className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-full sm:w-auto"
+                />
+              </div>
+            </div>
+          </div>
+          {/* EBM Codes Box */}
+          <div className="bg-blue-50 rounded-2xl shadow-lg p-6 min-h-[220px] flex flex-col">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">{t.codesFound}</h3>
+            {ebmResult && ebmResult.matches && ebmResult.matches.filter(c => c.relevance?.is_relevant).length > 0 ? (() => {
+              const relevantMatches = ebmResult.matches.filter(c => c.relevance?.is_relevant);
+              const uniqueCodes = [...new Map(relevantMatches.map(c => [c.code, c])).values()].map(c => c.code);
+              const codeColors = ['#fde047', '#a7f3d0', '#fca5a5', '#93c5fd', '#fcd34d', '#fbbf24', '#f472b6', '#6ee7b7'];
+              const codeColorMap = Object.fromEntries(uniqueCodes.map((code, idx) => [code, codeColors[idx % codeColors.length]]));
+              return (
+                <ul className="space-y-4">
+                  {[...new Map(relevantMatches.map(c => [c.code, c])).values()].map(code => (
+                    <li key={code.code} className="">
+                      <div className="font-semibold text-blue-800 flex items-center gap-2">
+                        <span style={{ background: codeColorMap[code.code], borderRadius: 4, padding: '0 6px', color: '#1e293b', fontWeight: 700 }}>{code.code}</span>
+                        <span>{code.title}</span>
+                      </div>
+                      <div className="text-gray-700 text-sm mb-1">{code.description}</div>
+                      <div className="text-xs text-gray-500">Score: <span className="font-mono">{code.explanation?.final_score?.toFixed(2)}</span></div>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })() : (
+              <div className="flex flex-1 flex-col items-center justify-center text-center py-8">
+                <DocumentMagnifyingGlassIcon className="h-12 w-12 text-blue-300 mb-4" />
+                <div className="text-blue-900 text-base font-medium mb-1">
+                  {language === 'de' ? 'Noch keine EBM-Codes gefunden.' : 'No EBM codes found yet.'}
+                </div>
+                <div className="text-gray-500 text-sm">
+                  {language === 'de'
+                    ? 'Die Analyse startet automatisch, sobald ein Transkript vorliegt.'
+                    : 'Analysis will start automatically once a transcript is available.'}
                 </div>
               </div>
-
-              {/* ICD10 Codes Section */}
-              {ebmResult && ebmResult.matches && ebmResult.matches.filter(c => c.relevance?.is_relevant).length > 0 && (() => {
-                const relevantMatches = ebmResult.matches.filter(c => c.relevance?.is_relevant);
-                const uniqueCodes = [...new Map(relevantMatches.map(c => [c.code, c])).values()].map(c => c.code);
-                const codeColors = ['#fde047', '#a7f3d0', '#fca5a5', '#93c5fd', '#fcd34d', '#fbbf24', '#f472b6', '#6ee7b7'];
-                const codeColorMap = Object.fromEntries(uniqueCodes.map((code, idx) => [code, codeColors[idx % codeColors.length]]));
-                return (
-                  <div className="mt-8">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">EBM Codes Found</h3>
-                    <div className="bg-blue-50 rounded-xl p-6">
-                      <ul className="space-y-4">
-                        {[...new Map(relevantMatches.map(c => [c.code, c])).values()].map(code => (
-                          <li key={code.code} className="">
-                            <div className="font-semibold text-blue-800">
-                              <span style={{ background: codeColorMap[code.code], borderRadius: 4, padding: '0 6px', color: '#1e293b', fontWeight: 700, marginRight: 6 }}>{code.code}</span>
-                              {code.title}
-                            </div>
-                            <div className="text-gray-700 text-sm mb-1">{code.description}</div>
-                            <div className="text-xs text-gray-500">Score: <span className="font-mono">{code.explanation?.final_score?.toFixed(2)}</span></div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Generate Summary Button */}
-              {transcript && (
-                <div className="mt-8 flex justify-center">
-                  <button
-                    onClick={generateMedicalSummary}
-                    disabled={isGeneratingSummary}
-                    className="px-6 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isGeneratingSummary ? 'Generating Summary...' : 'Create Medical Summary'}
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="mt-8">
-              {medicalSummary ? (
-                <div className="space-y-8 bg-white rounded-xl shadow-lg p-8 border border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-4 border-b border-gray-200">
-                    <div>
-                      <label className="block text-base font-semibold text-gray-700 mb-1">Patient ID</label>
-                      <input
-                        type="text"
-                        value={medicalSummary.patient_id}
-                        disabled
-                        className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 text-base cursor-not-allowed"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-base font-semibold text-gray-700 mb-1">Conversation ID</label>
-                      <input
-                        type="text"
-                        value={medicalSummary.conversation_id}
-                        disabled
-                        className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 text-base cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    {Object.entries(medicalSummary)
-                      .filter(([key]) => !['patient_id', 'conversation_id'].includes(key))
-                      .map(([key, value]) => (
-                        <div key={key}>
-                          <label className="block text-base font-semibold text-gray-700 mb-2">
-                            {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                          </label>
-                          <textarea
-                            value={value && value !== 'null' ? value : ''}
-                            onChange={(e) => setMedicalSummary(prev => prev ? {
-                              ...prev,
-                              [key]: e.target.value
-                            } : null)}
-                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 px-4 py-3 text-base min-h-[64px] transition-all placeholder-gray-400"
-                            rows={4}
-                            placeholder={`Enter ${key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`}
-                          />
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-gray-500">
-                  {isGeneratingSummary ? (
-                    <p>Generating medical summary...</p>
-                  ) : (
-                    <p>No medical summary available. Please generate one from the transcription.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
