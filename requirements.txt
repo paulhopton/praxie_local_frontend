@@ -1,4 +1,5 @@
-# Core dependencies for local transcription and diarization
+torch==2.1.2
+# For GPU, see https://pytorch.org/get-started/locally/ and install the correct torch/torchvision wheels
+torchvision==0.16.2
 faster-whisper
-pyannote.audio
-# For diarization, you may need a HuggingFace token for pyannote.audio models. 
+pyannote.audio 

@@ -622,12 +622,103 @@ export default function AudioRecorder() {
     audioChunksRef.current = [];
     const seq = seqRef.current;
     seqRef.current += 1;
-    if (model === 'local-diarization' || model === 'local') {
+    if (model === 'local' || model === 'local-diarization') {
       await sendChunkLocal(chunkToSend, seq);
       return;
     }
-    // Otherwise, use ElevenLabs
-    // ... existing code for ElevenLabs ...
+    // Convert to WAV and send
+    const wavBlob = convertToWav([chunkToSend]);
+    const formData = new FormData();
+    formData.append('file', wavBlob, 'audio.wav');
+    formData.append('language', language);
+    try {
+      const response = await fetch('/api/stream', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.body) {
+        setError('No response body from server');
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary;
+        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+          const chunk = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          if (chunk.startsWith('data:')) {
+            try {
+              const data = JSON.parse(chunk.slice(5).trim());
+              if (data.transcription) {
+                setTranscript(prev => {
+                  const clean = (txt: string) => txt.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+                  const prevClean = prev ? clean(prev) : '';
+                  const newClean = clean(data.transcription);
+                  if (!prevClean) return newClean;
+
+                  // Fuzzy sentence deduplication
+                  const splitSentences = (txt: string) => txt.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()) || [];
+                  const prevSentences = splitSentences(prevClean);
+                  const newSentences = splitSentences(newClean);
+                  if (!newSentences.length) return prevClean;
+
+                  // Fuzzy compare last prev and first new
+                  const lastPrev = prevSentences[prevSentences.length - 1];
+                  const firstNew = newSentences[0];
+
+                  // Simple similarity: normalized Levenshtein distance
+                  function levenshtein(a: string, b: string) {
+                    const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+                    for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+                    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+                    for (let i = 1; i <= a.length; i++) {
+                      for (let j = 1; j <= b.length; j++) {
+                        matrix[i][j] = a[i - 1] === b[j - 1]
+                          ? matrix[i - 1][j - 1]
+                          : 1 + Math.min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
+                      }
+                    }
+                    return matrix[a.length][b.length];
+                  }
+                  function similarity(a: string, b: string) {
+                    if (!a || !b) return 0;
+                    const dist = levenshtein(a, b);
+                    return 1 - dist / Math.max(a.length, b.length);
+                  }
+
+                  const threshold = 0.75; // 75% similar is considered a duplicate
+                  let resultSentences = [...prevSentences];
+                  if (similarity(lastPrev, firstNew) > threshold) {
+                    // Only append the rest of the new sentences
+                    resultSentences = resultSentences.slice(0, -1).concat(newSentences);
+                  } else {
+                    // Append all new sentences
+                    resultSentences = resultSentences.concat(newSentences);
+                  }
+                  // Remove duplicates that may have crept in
+                  const deduped = resultSentences.filter((s, i, arr) => i === 0 || similarity(s, arr[i - 1]) < threshold);
+                  return deduped.join(' ').replace(/\s+/g, ' ').trim();
+                });
+              } else if (data.error) {
+                setError(data.error);
+              }
+            } catch (err) {
+              console.error('Error parsing SSE chunk:', err, chunk);
+            }
+          }
+        }
+      }
+      // Only clear chunks if the request was successful
+      console.log('Successfully sent audio chunk');
+    } catch (err) {
+      console.error('Error sending chunk:', err);
+      setError('Error sending audio: ' + (err as Error).message);
+    }
   };
 
   const convertToWav = (audioChunks: Float32Array[]): Blob => {

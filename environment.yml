@@ -1,0 +1,12 @@
+name: whisper
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch==2.1.2
+      - torchvision==0.16.2
+      - faster-whisper
+      - pyannote.audio 

@@ -34,3 +34,38 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Local Whisper/Diarization Backend Setup
+
+To use the local Whisper or diarization backend, you need a compatible Python environment with the correct dependencies. We recommend using a clean environment to avoid version conflicts.
+
+### Option 1: Using Conda (Recommended)
+
+1. Create a new environment:
+   ```bash
+   conda env create -f environment.yml
+   conda activate whisper
+   ```
+2. Run the backend scripts (e.g., `local_transcribe.py`, `local_transcribe_diarization.py`) in this environment.
+
+### Option 2: Using pip (requirements.txt)
+
+1. (Optional) Create and activate a virtualenv:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the backend scripts in this environment.
+
+### Troubleshooting
+- Do **not** mix pip and conda installs for core packages (torch, torchvision, numpy, protobuf).
+- If you see errors about missing or incompatible packages, create a new environment and install only what you need.
+- For GPU support, adjust the torch/torchvision versions as needed (see PyTorch docs).
+
+---
+
+See below for the contents of `environment.yml` and `requirements.txt`.
