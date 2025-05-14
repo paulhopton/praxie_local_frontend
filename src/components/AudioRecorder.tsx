@@ -35,7 +35,7 @@ registerProcessor('audio-processor', AudioProcessor);
 `;
 
 // Add these constants at the top of the component
-const OVERLAP_SECONDS = 1; // 1 second overlap
+const OVERLAP_SECONDS = 0; // 1 second overlap
 const SILENCE_DURATION_MS = 700; // 700ms of silence to trigger send
 const SILENCE_THRESHOLD = 0.01; // Adjust as needed for your mic/environment
 
@@ -82,6 +82,7 @@ const translations: Record<'de' | 'en', Record<string, string>> = {
     doctor_specialisation: 'Arzt-Spezialisierung',
     speaker: 'Sprecher',
     at: 'um',
+    elevenlabs_diarization: 'ElevenLabs (Diarization)',
   },
   en: {
     appTitle: 'Praxie – Less Typing, More Healing.',
@@ -121,6 +122,7 @@ const translations: Record<'de' | 'en', Record<string, string>> = {
     doctor_specialisation: 'Doctor Specialization',
     speaker: 'Speaker',
     at: 'at',
+    elevenlabs_diarization: 'ElevenLabs (Diarization)',
   }
 };
 
@@ -253,7 +255,49 @@ function IconMenu({ icon, options, value, onSelect, tooltip, renderOption, getKe
   );
 }
 
-type DiarizedSegment = { speaker: number; start: number; end: number; text: string };
+// Update the DiarizedSegment type to handle both local and ElevenLabs formats
+type DiarizedSegment = {
+  speaker: number | string;
+  start: number;
+  end: number;
+  text: string;
+};
+
+// Add type for speaker style
+type SpeakerStyle = {
+  position: string;
+  background: string;
+  border: string;
+  textColor: string;
+};
+
+// Add speaker styling constants with proper typing
+const SPEAKER_STYLES: Record<number, SpeakerStyle> = {
+  0: { 
+    position: 'justify-start',
+    background: 'bg-white',
+    border: 'border-[#54A9E1]',
+    textColor: 'text-[#54A9E1]'
+  },
+  1: { 
+    position: 'justify-end',
+    background: 'bg-[#eaf6fc]',
+    border: 'border-[#54A9E1]',
+    textColor: 'text-[#54A9E1]'
+  },
+  2: { 
+    position: 'justify-start pl-8',
+    background: 'bg-[#f0fdf4]',
+    border: 'border-emerald-500',
+    textColor: 'text-emerald-600'
+  },
+  3: { 
+    position: 'justify-end pr-8',
+    background: 'bg-[#fef2f2]',
+    border: 'border-rose-500',
+    textColor: 'text-rose-600'
+  }
+};
 
 export default function AudioRecorder() {
   const [recording, setRecording] = useState(false);
@@ -261,7 +305,7 @@ export default function AudioRecorder() {
   const [finalTranscript, setFinalTranscript] = useState('');
   const [pendingTranscript, setPendingTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [model, setModel] = useState<'elevenlabs' | 'local' | 'local-diarization'>('elevenlabs');
+  const [model, setModel] = useState<'elevenlabs' | 'local' | 'local-diarization' | 'elevenlabs-diarization'>('elevenlabs');
   const [language, setLanguage] = useState<Language>('de');
   const t = translations[language];
   const [ebmResult, setEbmResult] = useState<null | {
@@ -317,6 +361,8 @@ export default function AudioRecorder() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [copyAllSuccess, setCopyAllSuccess] = useState(false);
   const [diarizedSegments, setDiarizedSegments] = useState<DiarizedSegment[] | null>(null);
+  // Add new state for storing audio chunks for cumulative diarization
+  const cumulativeAudioChunksRef = useRef<Float32Array[]>([]);
 
   // Language options
   const languageOptions = [
@@ -409,9 +455,12 @@ export default function AudioRecorder() {
       return;
     }
     try {
-      // Reset sequence and transcript buffer
+      // Reset all state
       seqRef.current = 0;
       transcriptChunksRef.current = {};
+      setDiarizedSegments(null);
+      cumulativeAudioChunksRef.current = []; // Reset cumulative audio chunks
+      
       // Get audio stream
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -508,7 +557,10 @@ export default function AudioRecorder() {
         }
         const data = await response.json();
         if (data.segments) {
-          setDiarizedSegments(data.segments);
+          setDiarizedSegments(prevSegments => {
+            if (!prevSegments) return data.segments;
+            return [...prevSegments, ...data.segments];
+          });
           setTranscript('');
         } else if (data.transcription) {
           transcriptChunksRef.current[seq] = data.transcription;
@@ -593,11 +645,14 @@ export default function AudioRecorder() {
   const sendChunkWithOverlap = async () => {
     const chunks = audioChunksRef.current;
     if (!chunks.length) return;
+    
     // Flatten all chunks
     const flat = flattenChunks(chunks);
+    
     // Calculate overlap samples
     const sampleRate = 16000;
     const overlapSamples = Math.floor(OVERLAP_SECONDS * sampleRate);
+    
     // Prepare chunk to send (prepend overlap from previous send)
     let chunkToSend: Float32Array;
     if (overlapBufferRef.current) {
@@ -608,6 +663,7 @@ export default function AudioRecorder() {
     } else {
       chunkToSend = flat;
     }
+    
     // Only send if chunk is long enough and not silent
     const minSamples = 16000 * 0.5; // 0.5 seconds at 16kHz
     const rms = Math.sqrt(chunkToSend.reduce((sum, v) => sum + v * v, 0) / chunkToSend.length);
@@ -616,16 +672,66 @@ export default function AudioRecorder() {
       audioChunksRef.current = [];
       return;
     }
+    
     // Update overlap buffer for next send
     overlapBufferRef.current = flat.slice(flat.length - overlapSamples);
     // Clear current chunks
     audioChunksRef.current = [];
     const seq = seqRef.current;
     seqRef.current += 1;
+
     if (model === 'local' || model === 'local-diarization') {
       await sendChunkLocal(chunkToSend, seq);
       return;
     }
+
+    if (model === 'elevenlabs-diarization') {
+      // Store the current chunk for cumulative processing
+      cumulativeAudioChunksRef.current.push(chunkToSend);
+      
+      // Concatenate all audio chunks into a single Float32Array
+      const totalLength = cumulativeAudioChunksRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
+      const concatenatedAudio = new Float32Array(totalLength);
+      let offset = 0;
+      
+      // Copy each chunk into the concatenated array in order
+      for (const chunk of cumulativeAudioChunksRef.current) {
+        concatenatedAudio.set(chunk, offset);
+        offset += chunk.length;
+      }
+      
+      // Create WAV blob from the concatenated audio
+      const cumulativeWavBlob = convertToWav([concatenatedAudio]);
+      
+      // Send the concatenated audio
+      const formData = new FormData();
+      formData.append('file', cumulativeWavBlob, 'audio.wav');
+      formData.append('language', language);
+      
+      try {
+        const response = await fetch('/api/stream-diarization', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          setError('Diarization error from ElevenLabs');
+          return;
+        }
+        
+        const data = await response.json();
+        if (data.segments) {
+          setDiarizedSegments(data.segments);
+          setTranscript('');
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } catch (err) {
+        setError('Diarization error: ' + (err as Error).message);
+      }
+      return;
+    }
+
     // Convert to WAV and send
     const wavBlob = convertToWav([chunkToSend]);
     const formData = new FormData();
@@ -1151,21 +1257,45 @@ export default function AudioRecorder() {
                 {/* Transcript */}
                 <div className="mt-8 flex-1">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">{t.transcript}</h3>
-                  <div className="bg-gray-50 rounded-xl p-6 min-h-[200px]">
-                    {diarizedSegments && model === 'local-diarization' ? (
+                  <div className="bg-gray-50 rounded-xl p-6 min-h-[200px] overflow-y-auto max-h-[600px]">
+                    {diarizedSegments && (model === 'local-diarization' || model === 'elevenlabs-diarization') ? (
                       <div className="space-y-4">
                         {diarizedSegments.map((seg: DiarizedSegment, i: number) => {
-                          const isLeft = seg.speaker % 2 === 1;
+                          // Convert speaker to number if it's a string (ElevenLabs format)
+                          const speakerNum = typeof seg.speaker === 'string' 
+                            ? parseInt(seg.speaker.replace(/[^\d]/g, ''), 10) || 0
+                            : seg.speaker;
+                          
+                          // Get style for this speaker (mod 4 to support up to 4 speakers)
+                          const style = SPEAKER_STYLES[speakerNum % 4];
+                          
                           return (
-                            <div key={i} className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}> 
-                              <div className={`max-w-[80%] rounded-2xl shadow-md px-4 py-3 ${isLeft ? 'bg-white' : 'bg-[#eaf6fc]'}`}
-                                   style={{ border: `2px solid #54A9E1` }}>
+                            <div key={i} className={`flex ${style.position}`}> 
+                              <div 
+                                className={`
+                                  max-w-[80%] rounded-2xl px-4 py-3 
+                                  ${style.background}
+                                  transition-all duration-200 hover:shadow-md
+                                  border-2
+                                `}
+                                style={{ 
+                                  borderColor: style.border.replace('border-', '').startsWith('#') 
+                                    ? style.border.replace('border-', '')
+                                    : `var(--${style.border.replace('border-', '')}-500)`
+                                }}
+                              >
                                 <div className="flex items-center gap-2 mb-1 text-xs text-gray-500">
-                                  <span style={{ color: '#54A9E1', fontWeight: 600 }}>{t.speaker} {seg.speaker}</span>
+                                  <span className={`font-semibold ${style.textColor}`}>
+                                    {t.speaker} {speakerNum + 1}
+                                  </span>
                                   <span>·</span>
-                                  <span>{t.at} {formatTimestamp(seg.start)}–{formatTimestamp(seg.end)}</span>
+                                  <span>
+                                    {t.at} {formatTimestamp(seg.start)}–{formatTimestamp(seg.end)}
+                                  </span>
                                 </div>
-                                <div className="text-gray-900 text-base whitespace-pre-line">{seg.text}</div>
+                                <div className="text-gray-900 text-base whitespace-pre-line break-words">
+                                  {seg.text}
+                                </div>
                               </div>
                             </div>
                           );
@@ -1173,7 +1303,11 @@ export default function AudioRecorder() {
                       </div>
                     ) : (
                       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {transcript}
+                        {transcript || (
+                          <span className="text-gray-400 italic">
+                            {t.noTranscript}
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
@@ -1306,8 +1440,9 @@ export default function AudioRecorder() {
                   { code: 'elevenlabs', label: 'ElevenLabs', icon: <Cog6ToothIcon className="h-6 w-6" /> },
                   { code: 'local', label: 'Whisper', icon: <Cog6ToothIcon className="h-6 w-6" /> },
                   { code: 'local-diarization', label: 'Whisper (Diarization)', icon: <Cog6ToothIcon className='h-6 w-6' /> },
+                  { code: 'elevenlabs-diarization', label: 'ElevenLabs (Diarization)', icon: <Cog6ToothIcon className='h-6 w-6' /> },
                 ]}
-                value={{ code: model, label: model === 'elevenlabs' ? 'ElevenLabs' : model === 'local' ? 'Whisper' : 'Whisper (Diarization)' }}
+                value={{ code: model, label: model === 'elevenlabs' ? 'ElevenLabs' : model === 'local' ? 'Whisper' : model === 'local-diarization' ? 'Whisper (Diarization)' : 'ElevenLabs (Diarization)' }}
                 onSelect={opt => setModel(opt.code)}
                 tooltip={t.model}
                 renderOption={opt => opt.label}
